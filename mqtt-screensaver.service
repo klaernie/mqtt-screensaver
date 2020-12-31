@@ -1,0 +1,9 @@
+[Unit]
+Description=Poke the screensaver according to OpenHABs NightMode item
+
+[Service]
+ExecStart=/home/pi/mqtt-screensaver
+Type=simple
+
+[Install]
+WantedBy=default.target

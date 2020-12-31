@@ -1,0 +1,47 @@
+#!/bin/bash
+export DISPLAY=:0
+
+RIGHT_EDGE=$(xdpyinfo | grep dimensions | sed -r 's/^[^0-9]*([0-9]+)x[0-9]+.*$/\1/')
+
+function screen_off {
+	xscreensaver-command -activate
+	xset dpms force off
+	echo "poked screen to keep it off"
+}
+
+function screen_on {
+	xscreensaver-command -deactivate
+	xset dpms force on
+	xdotool mousemove $RIGHT_EDGE $((10#$(date +%M)*10))
+	echo "poked screen to keep it on"
+}
+
+desired_state="unknown";
+continue=true
+while true; do
+	mosquitto_sub -h mqtt.ak-online.be -t 'openhab/MagicMirrorScreen' \
+	| while [[ $continue = true ]]; do
+
+		# read the possibly next target state from MQTT
+		read -t 50 NewState
+		read_rc=$?
+		echo "read state: <$NewState> with RC$read_rc"
+
+		case "$read_rc" in
+			0|142) continue=true;;
+			*) continue=false;
+		esac
+
+		# and if its a ON or OFF update our state
+		case "$NewState" in
+			OFF) desired_state=OFF ;;
+			ON)  desired_state=ON ;;
+		esac
+
+		# then behave according to our state
+		case "$desired_state" in
+			OFF) screen_off ;;
+			ON)  screen_on  ;;
+		esac
+	done
+done
