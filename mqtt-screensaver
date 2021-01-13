@@ -1,6 +1,12 @@
 #!/bin/bash
 export DISPLAY=:0
 
+export identity=$(hostname | cut -d. -f1)
+
+export MQTT_SERVER=mqtt.ak-online.be
+export MQTT_TOPIC="mqtt-screensaver/$identity/state"
+export MQTT_TOPIC_AVAIL="mqtt-screensaver/$identity/bridgestate"
+
 RIGHT_EDGE=$(xdpyinfo | grep dimensions | sed -r 's/^[^0-9]*([0-9]+)x[0-9]+.*$/\1/')
 
 function screen_off {
@@ -16,11 +22,48 @@ function screen_on {
 	echo "poked screen to keep it on"
 }
 
+function publish_discovery {
+	mosquitto_pub \
+		-h $MQTT_SERVER \
+		-t "homeassistant/switch/mqttscreensaver/$identity/config" \
+		-r \
+		-s \
+		<<EOT
+	{
+		"name": "Screensaver on $identity",
+		"state_topic": "$MQTT_TOPIC",
+		"command_topic": "$MQTT_TOPIC",
+		"availability_topic": "$MQTT_TOPIC_AVAIL",
+		"unique_id": "mqtt_screensaver_$identity",
+		"device": {
+			"identifiers": "mqtt screensaver on $identity",
+			"name": "mqtt-screensaver",
+			"model": "mqtt-screensaver"
+		}
+	}
+EOT
+	mosquitto_pub -h $MQTT_SERVER -t "$MQTT_TOPIC_AVAIL" -m online
+}
+
+shutdown=false
+
+function handle_sigint {
+	echo "shutdown requested"
+	shutdown=true
+}
+trap 'handle_sigint' SIGINT
+
 desired_state="unknown";
-continue=true
-while true; do
-	mosquitto_sub -h mqtt.ak-online.be -t 'openhab/MagicMirrorScreen' \
+while [[ $shutdown = false ]]; do
+	continue=true
+	mosquitto_sub \
+		-h $MQTT_SERVER \
+		--will-topic $MQTT_TOPIC_AVAIL \
+		--will-payload offline \
+		--will-retain \
+		-t "$MQTT_TOPIC" \
 	| while [[ $continue = true ]]; do
+		[[ $shutdown = false ]] && publish_discovery
 
 		# read the possibly next target state from MQTT
 		read -t 50 NewState
@@ -45,3 +88,4 @@ while true; do
 		esac
 	done
 done
+mosquitto_pub -h $MQTT_SERVER -t "$MQTT_TOPIC_AVAIL" -m offline
