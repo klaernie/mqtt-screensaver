@@ -30,10 +30,12 @@ function publish_discovery {
 		-s \
 		<<EOT
 	{
-		"name": "Screensaver on $identity",
+		"name": "$identity's screen",
 		"state_topic": "$MQTT_TOPIC",
 		"command_topic": "$MQTT_TOPIC",
 		"availability_topic": "$MQTT_TOPIC_AVAIL",
+		"retain": true,
+		"icon": "mdi:monitor",
 		"unique_id": "mqtt_screensaver_$identity",
 		"device": {
 			"identifiers": "mqtt screensaver on $identity",
